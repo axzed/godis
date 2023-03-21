@@ -25,6 +25,7 @@ func ListenAndServeWithSignal(cfg *Config, handler tcp.Handler) error {
 	sigChan := make(chan os.Signal)
 	// Notify the signal channel when the process receives SIGHUP, SIGQUIT, SIGTERM, SIGINT
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
+	// create a goroutine to listen on the signal channel
 	go func() {
 		// when the process receives SIGHUP, SIGQUIT, SIGTERM, SIGINT, close the closeChan
 		sig := <-sigChan
@@ -34,18 +35,21 @@ func ListenAndServeWithSignal(cfg *Config, handler tcp.Handler) error {
 			closeChan <- struct{}{}
 		}
 	}()
+
 	listener, err := net.Listen("tcp", cfg.Address) // create the listener (TCP socket)
 	if err != nil {
 		return err
 	}
 	logger.Info("start listen")
 	ListenAndServe(listener, handler, closeChan) // start the server
+	
 	return nil
 }
 
 // ListenAndServe starts a TCP server
 // handle connections in goroutines
 func ListenAndServe(listener net.Listener, handler tcp.Handler, closeChan <-chan struct{}) {
+	// close the listener and handler when the server stops (get the signal from closeChan)
 	go func() {
 		<-closeChan
 		logger.Info("shutting down")
